@@ -1,0 +1,26 @@
+{
+  "name": "ripline-cli",
+  "version": "0.1.0",
+  "description": "Command line interface for RipLine snippets service.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/d0liver/ripline-cli.git"
+  },
+  "keywords": [
+    "ripline",
+    "snippets"
+  ],
+  "author": "David Oliver",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/d0liver/ripline-cli/issues"
+  },
+  "homepage": "https://github.com/d0liver/ripline-cli#readme",
+  "dependencies": {
+    "request": "^2.81.0"
+  }
+}
