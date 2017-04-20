@@ -1,5 +1,7 @@
 #!/usr/bin/env coffee
-
+fs = require 'fs'
+crypto = require 'crypto'
+{exec} = require 'child_process'
 request = require 'request'
 
 options =
@@ -20,10 +22,36 @@ options =
 
 request options, (error, response, body) ->
 	if not error? and response.statusCode is 200
-		if body?.data?.snippets?[0]?.text?
-			process.stdout.write body.data.snippets[0].text
-			process.stdout.write '\n'
+		text = body?.data?.snippets?[0]?.text
+		if text?
+			getModifiedSnippet text, (text) ->
+				process.stdout.write "#{text}"
 	else
-		console.log "Message: ", body.text
-		console.log "Error: ", error
-		console.log "Status code was: ", response.statusCode
+		process.stderr.write "Request error: #{response.statusCode}\n"
+		process.stderr.write "Body: \n #{body.text}\n"
+
+
+touch = (fname) ->
+	fs.closeSync fs.openSync fname, 'w'
+
+generateNonce = ->
+	buf = crypto.randomBytes 8
+	return buf.toString('base64').replace(/\//g,'_').replace(/\+/g,'-')
+
+getModifiedSnippet = (snip_text, cb) ->
+
+	fname = "/tmp/#{generateNonce()}"
+	# process.stderr.write "Creating tmp file: #{fname}\n"
+
+	fs.writeFileSync fname, snip_text
+
+	# process.stderr.write "Opening tmp file in editor...\n"
+
+	exec "#{process.env.EDITOR} +'normal gg\"+dG' +'call RiplinePaste()' #{fname}", (error, stdout, stderr) ->
+		if error
+			process.stderr.write "Error: #{error}"
+			return
+		contents = fs.readFileSync fname, 'utf8'
+		# Clean up the temp file
+		fs.unlinkSync fname
+		cb contents
