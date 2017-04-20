@@ -1,8 +1,9 @@
 #!/usr/bin/env coffee
-fs = require 'fs'
-crypto = require 'crypto'
-{exec} = require 'child_process'
+fs      = require 'fs'
+crypto  = require 'crypto'
+{exec}  = require 'child_process'
 request = require 'request'
+argv    = require('minimist') process.argv.slice 2
 
 options =
 	uri: 'http://www.ripline.io/graphql',
@@ -18,7 +19,7 @@ options =
 				}
 			}
 		"""
-		variables: text: process.argv[2..].join ' '
+		variables: text: argv._.join ' '
 
 request options, (error, response, body) ->
 	if not error? and response.statusCode is 200
@@ -47,7 +48,12 @@ getModifiedSnippet = (snip_text, cb) ->
 
 	# process.stderr.write "Opening tmp file in editor...\n"
 
-	exec "#{process.env.EDITOR} +'normal gg\"+dG' +'call RiplinePaste()' #{fname}", (error, stdout, stderr) ->
+	# -n indicates that the text should be placed in the file without being
+	# expanded as a snippet. Otherwise we delete the file contents (snippet) to
+	# the clipboard and then expand the snippet from the clipboard.
+	vim_commands = if argv.n then '' else "+'normal gg\"+dG' +'call RiplinePaste()'"
+
+	exec "#{process.env.EDITOR} #{vim_commands} #{fname}", (error, stdout, stderr) ->
 		if error
 			process.stderr.write "Error: #{error}"
 			return
