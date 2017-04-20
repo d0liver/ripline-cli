@@ -51,7 +51,23 @@ getModifiedSnippet = (snip_text, cb) ->
 	# -n indicates that the text should be placed in the file without being
 	# expanded as a snippet. Otherwise we delete the file contents (snippet) to
 	# the clipboard and then expand the snippet from the clipboard.
-	vim_commands = if argv.n then '' else "+'normal gg\"+dG' +'call RiplinePaste()'"
+	vim_commands = [
+		# Initial window resize s out temporarily because there are problems
+		# with it right now (doesn't snap to full screen like it should and
+		# problems in pipes).
+		# "set lines=#{process.stdout.rows}"
+		# "set columns=#{process.stdout.columns}"
+	]
+
+	unless argv.n
+		vim_commands.push [
+			"normal gg\"+dG"
+			"call RiplinePaste()"
+		]...
+
+	vim_commands = vim_commands.reduce (str, command) ->
+		"#{str} +'#{command}'"
+	, ''
 
 	exec "#{process.env.EDITOR} #{vim_commands} #{fname}", (error, stdout, stderr) ->
 		if error
