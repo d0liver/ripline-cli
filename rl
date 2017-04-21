@@ -1,36 +1,60 @@
 #!/usr/bin/env coffee
-fs      = require 'fs'
-crypto  = require 'crypto'
-{exec}  = require 'child_process'
-request = require 'request'
-argv    = require('minimist') process.argv.slice 2
+fs       = require 'fs'
+crypto   = require 'crypto'
+{exec}   = require 'child_process'
+request  = require 'request'
+minimist = require 'minimist'
 
-options =
-	uri: 'http://www.ripline.io/graphql',
-	method: 'POST',
-	json:
-		query: """
-			query snippets($text: String!) {
-				snippets(text: $text) {
-					_id
-					title
-					text
-					username
+getSnip = (tags, cb) ->
+
+	options =
+		uri: uri
+		method: 'POST'
+		json:
+			query: """
+				query snippets($text: String!) {
+					snippets(text: $text) {
+						_id
+						title
+						text
+						username
+					}
 				}
-			}
-		"""
-		variables: text: argv._.join ' '
+			"""
+			variables: text: tags.join ' '
 
-request options, (error, response, body) ->
-	if not error? and response.statusCode is 200
-		text = body?.data?.snippets?[0]?.text
-		if text?
-			getModifiedSnippet text, (text) ->
-				process.stdout.write "#{text}"
-	else
-		process.stderr.write "Request error: #{response.statusCode}\n"
-		process.stderr.write "Body: \n #{body.text}\n"
+	request options, (error, response, body) ->
+		if not error? and response.statusCode is 200 and text = body?.data?.snippets?[0]?.text
+			cb null, text
+		else if error or response.statusCode isnt 200
+			process.stderr.write "Request error: #{response.statusCode}\n"
+			process.stderr.write "Body: \n #{body.text}\n"
+		# Otherwise we just didn't get a matching snippet back so we do nothing.
 
+doCommand = (command, args) ->
+	switch command
+		when 'fetch'
+			getSnip args, (error, text) ->
+				newline = if argv.n then '' else '\n'
+				process.stdout.write "#{text}#{newline}"
+		when 'edit'
+			getSnip args, (error, text) ->
+				getModifiedSnippet text, (text) ->
+					process.stdout.write text
+		when 'list-tags'
+			getTags (error, tags) ->
+				process.stdout.write "#{tag}\n" for tag in tags
+
+		when 'update'
+			process.stderr.write "Updating tags...\n"
+			dest_dir =
+				if args.length isnt 0
+					args[0]
+				else
+					"#{process.env.HOME}/.cache/ripline"
+
+			updateTags dest_dir, (error, result) ->
+				process.stderr.write "Finished\n"
 
 touch = (fname) ->
 	fs.closeSync fs.openSync fname, 'w'
@@ -38,6 +62,34 @@ touch = (fname) ->
 generateNonce = ->
 	buf = crypto.randomBytes 8
 	return buf.toString('base64').replace(/\//g,'_').replace(/\+/g,'-')
+
+getTags = (cb) ->
+	request
+		uri: uri
+		method: 'POST'
+		json:
+			query: """
+				{
+					tags
+				}
+			"""
+		, (error, response, body) ->
+			cb null, body.data.tags
+
+updateTags = (dest_dir, cb) ->
+	console.log "Dest dir: ", dest_dir
+	# Strip off the trailing slash if there is one
+	dest_dir = dest_dir.slice(0, -1) if dest_dir.charAt(dest_dir.length - 1) is '/'
+
+	getTags (error, tags) ->
+		# Put the lower cased variants in the file as well for easier use (I
+		# pretty much always type the lower cased tag names)
+		for tag in tags when /[A-Z]/.test tag
+			tags.push tag.toLowerCase()
+
+		fs.mkdirSync dest_dir unless fs.existsSync dest_dir
+		fs.writeFileSync "#{dest_dir}/tags", tags.join '\n'
+		cb null, null
 
 getModifiedSnippet = (snip_text, cb) ->
 
@@ -77,3 +129,18 @@ getModifiedSnippet = (snip_text, cb) ->
 		# Clean up the temp file
 		fs.unlinkSync fname
 		cb contents
+
+minimist_opts =
+	boolean: ['dev', 'n']
+	default:
+		dev: false
+
+argv = minimist process.argv.slice(2), minimist_opts
+[command, command_args...] = argv._
+
+uri = if argv.dev
+		'http://localhost:3000/graphql'
+	else
+		'http://www.ripline.io/graphql'
+
+doCommand command, command_args
